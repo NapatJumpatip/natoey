@@ -17,8 +17,7 @@ app.use(helmet());
 
 // CORS
 const allowedOrigins = [
-    'https://ncon2559.com',
-    'https://www.ncon2559.com',
+    'https://natoey.vercel.app',
 ];
 if (process.env.NODE_ENV !== 'production') {
     allowedOrigins.push('http://localhost:5173', 'http://localhost:3000');
