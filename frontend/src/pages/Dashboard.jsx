@@ -88,7 +88,22 @@ export default function Dashboard() {
                     <button onClick={() => navigate('/documents/new?type=PO')} className="btn-secondary">
                         <ShoppingCartIcon className="w-4 h-4" /> New PO
                     </button>
-                    <button onClick={() => window.open('/api/reports/export?format=excel&type=vat-sales', '_blank')} className="btn-ghost">
+                    <button onClick={async () => {
+                        try {
+                            const token = localStorage.getItem('accessToken');
+                            const apiUrl = import.meta.env.VITE_API_URL || '/api';
+                            const res = await fetch(`${apiUrl}/reports/export?format=excel&type=vat-sales`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'NCON2559_vat-sales.xlsx';
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                        } catch { toast.error('Export failed'); }
+                    }} className="btn-ghost">
                         <ArrowDownTrayIcon className="w-4 h-4" /> Export VAT
                     </button>
                 </div>

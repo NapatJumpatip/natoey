@@ -1,4 +1,7 @@
 import { ArrowDownTrayIcon, DocumentTextIcon, TableCellsIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 const exportCards = [
     { title: 'Invoice PDF', desc: 'Export invoices in PDF format', format: 'pdf', type: 'vat-sales', icon: DocumentTextIcon, color: 'from-red-500 to-red-600' },
@@ -10,8 +13,28 @@ const exportCards = [
 ];
 
 export default function Reports() {
-    const handleExport = (format, type) => {
-        window.open(`/api/reports/export?format=${format}&type=${type}`, '_blank');
+    const handleExport = async (format, type) => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const response = await fetch(`${API_URL}/reports/export?format=${format}&type=${type}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Export failed');
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `NCON2559_${type}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success('Export downloaded');
+        } catch (err) {
+            toast.error('Export failed');
+        }
     };
 
     return (

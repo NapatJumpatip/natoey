@@ -23,13 +23,13 @@ router.get('/summary', authenticate, async (req, res) => {
         // Outstanding Receivables (INVOICE/TAX_INVOICE not PAID)
         const receivables = await pool.query(
             `SELECT COALESCE(SUM(net_total), 0) as total FROM documents d
-       WHERE doc_type IN ('INVOICE', 'TAX_INVOICE') AND status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
+       WHERE d.doc_type IN ('INVOICE', 'TAX_INVOICE') AND d.status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
         );
 
         // Outstanding Payables (PO/VENDOR_PAYMENT not PAID)
         const payables = await pool.query(
             `SELECT COALESCE(SUM(net_total), 0) as total FROM documents d
-       WHERE doc_type IN ('PO', 'VENDOR_PAYMENT') AND status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
+       WHERE d.doc_type IN ('PO', 'VENDOR_PAYMENT') AND d.status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
         );
 
         // Monthly totals (current month)
@@ -41,56 +41,56 @@ router.get('/summary', authenticate, async (req, res) => {
         const pIdx = params.length;
         const monthlyIncome = await pool.query(
             `SELECT COALESCE(SUM(net_total), 0) as total FROM documents d
-       WHERE doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') AND status = 'PAID'
-       AND created_at >= $${pIdx + 1} AND created_at <= $${pIdx + 2} ${projectFilter}`, monthParams
+       WHERE d.doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') AND d.status = 'PAID'
+       AND d.created_at >= $${pIdx + 1} AND d.created_at <= $${pIdx + 2} ${projectFilter}`, monthParams
         );
 
         const monthlyExpense = await pool.query(
             `SELECT COALESCE(SUM(net_total), 0) as total FROM documents d
-       WHERE doc_type IN ('PO', 'VENDOR_PAYMENT') AND status = 'PAID'
-       AND created_at >= $${pIdx + 1} AND created_at <= $${pIdx + 2} ${projectFilter}`, monthParams
+       WHERE d.doc_type IN ('PO', 'VENDOR_PAYMENT') AND d.status = 'PAID'
+       AND d.created_at >= $${pIdx + 1} AND d.created_at <= $${pIdx + 2} ${projectFilter}`, monthParams
         );
 
         // VAT Payable = VAT from sales - VAT from purchases
         const vatSales = await pool.query(
             `SELECT COALESCE(SUM(vat_amount), 0) as total FROM documents d
-       WHERE doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') AND status != 'CANCELLED' ${projectFilter}`, params
+       WHERE d.doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') AND d.status != 'CANCELLED' ${projectFilter}`, params
         );
         const vatPurchase = await pool.query(
             `SELECT COALESCE(SUM(vat_amount), 0) as total FROM documents d
-       WHERE doc_type IN ('PO', 'VENDOR_PAYMENT') AND status != 'CANCELLED' ${projectFilter}`, params
+       WHERE d.doc_type IN ('PO', 'VENDOR_PAYMENT') AND d.status != 'CANCELLED' ${projectFilter}`, params
         );
 
         // WHT Payable
         const whtPayable = await pool.query(
             `SELECT COALESCE(SUM(wht_amount), 0) as total FROM documents d
-       WHERE status != 'CANCELLED' ${projectFilter}`, params
+       WHERE d.status != 'CANCELLED' ${projectFilter}`, params
         );
 
         // Overdue count
         const overdue = await pool.query(
             `SELECT COUNT(*) as count FROM documents d
-       WHERE due_date < NOW() AND status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
+       WHERE d.due_date < NOW() AND d.status NOT IN ('PAID', 'CANCELLED') ${projectFilter}`, params
         );
 
-        // Cash flow data (last 6 months)
+        // Cash flow data (last 12 months)
         const cashFlow = await pool.query(
             `SELECT 
-        TO_CHAR(created_at, 'YYYY-MM') as month,
-        SUM(CASE WHEN doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') THEN net_total ELSE 0 END) as cash_in,
-        SUM(CASE WHEN doc_type IN ('PO', 'VENDOR_PAYMENT') THEN net_total ELSE 0 END) as cash_out
+        TO_CHAR(d.created_at, 'YYYY-MM') as month,
+        SUM(CASE WHEN d.doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') THEN d.net_total ELSE 0 END) as cash_in,
+        SUM(CASE WHEN d.doc_type IN ('PO', 'VENDOR_PAYMENT') THEN d.net_total ELSE 0 END) as cash_out
        FROM documents d
-       WHERE status != 'CANCELLED' AND created_at >= NOW() - INTERVAL '6 months' ${projectFilter}
-       GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+       WHERE d.status != 'CANCELLED' AND d.created_at >= NOW() - INTERVAL '12 months' ${projectFilter}
+       GROUP BY TO_CHAR(d.created_at, 'YYYY-MM')
        ORDER BY month`, params
         );
 
         // Expense by category
         const expenseByCategory = await pool.query(
-            `SELECT doc_type as category, COALESCE(SUM(net_total), 0) as total
+            `SELECT d.doc_type as category, COALESCE(SUM(d.net_total), 0) as total
        FROM documents d
-       WHERE doc_type IN ('PO', 'VENDOR_PAYMENT', 'ADVANCE') AND status != 'CANCELLED' ${projectFilter}
-       GROUP BY doc_type`, params
+       WHERE d.doc_type IN ('PO', 'VENDOR_PAYMENT', 'ADVANCE') AND d.status != 'CANCELLED' ${projectFilter}
+       GROUP BY d.doc_type`, params
         );
 
         // Recent activity
@@ -100,7 +100,7 @@ router.get('/summary', authenticate, async (req, res) => {
        FROM documents d
        LEFT JOIN projects p ON p.id = d.project_id
        LEFT JOIN users u ON u.id = d.created_by
-       WHERE 1=1 ${projectFilter.replace('d.project_id', 'd.project_id')}
+       WHERE 1=1 ${projectFilter}
        ORDER BY d.created_at DESC LIMIT 10`, params
         );
 
@@ -127,26 +127,26 @@ router.get('/summary', authenticate, async (req, res) => {
 router.get('/vat-sales', authenticate, async (req, res) => {
     try {
         const { period } = req.query; // YYYY-MM
-        let filter = "AND doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT')";
         const params = [];
+        let periodFilter = '';
         if (period) {
-            filter += ` AND TO_CHAR(created_at, 'YYYY-MM') = $1`;
+            periodFilter = `AND TO_CHAR(d.created_at, 'YYYY-MM') = $1`;
             params.push(period);
         }
         const result = await pool.query(
             `SELECT d.*, p.name as project_name FROM documents d
        LEFT JOIN projects p ON p.id = d.project_id
-       WHERE status != 'CANCELLED' ${filter}
+       WHERE d.status != 'CANCELLED' AND d.doc_type IN ('INVOICE', 'TAX_INVOICE', 'RECEIPT') ${periodFilter}
        ORDER BY d.created_at`, params
         );
 
-        const totalVat = result.rows.reduce((sum, r) => sum + parseFloat(r.vat_amount), 0);
-        const totalSubtotal = result.rows.reduce((sum, r) => sum + parseFloat(r.subtotal), 0);
+        const totalVat = result.rows.reduce((sum, r) => sum + parseFloat(r.vat_amount || 0), 0);
+        const totalSubtotal = result.rows.reduce((sum, r) => sum + parseFloat(r.subtotal || 0), 0);
 
         res.json({ documents: result.rows, total_subtotal: totalSubtotal, total_vat: totalVat });
     } catch (err) {
         console.error('VAT sales error:', err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -154,26 +154,26 @@ router.get('/vat-sales', authenticate, async (req, res) => {
 router.get('/vat-purchase', authenticate, async (req, res) => {
     try {
         const { period } = req.query;
-        let filter = "AND doc_type IN ('PO', 'VENDOR_PAYMENT')";
         const params = [];
+        let periodFilter = '';
         if (period) {
-            filter += ` AND TO_CHAR(created_at, 'YYYY-MM') = $1`;
+            periodFilter = `AND TO_CHAR(d.created_at, 'YYYY-MM') = $1`;
             params.push(period);
         }
         const result = await pool.query(
             `SELECT d.*, p.name as project_name FROM documents d
        LEFT JOIN projects p ON p.id = d.project_id
-       WHERE status != 'CANCELLED' ${filter}
+       WHERE d.status != 'CANCELLED' AND d.doc_type IN ('PO', 'VENDOR_PAYMENT') ${periodFilter}
        ORDER BY d.created_at`, params
         );
 
-        const totalVat = result.rows.reduce((sum, r) => sum + parseFloat(r.vat_amount), 0);
-        const totalSubtotal = result.rows.reduce((sum, r) => sum + parseFloat(r.subtotal), 0);
+        const totalVat = result.rows.reduce((sum, r) => sum + parseFloat(r.vat_amount || 0), 0);
+        const totalSubtotal = result.rows.reduce((sum, r) => sum + parseFloat(r.subtotal || 0), 0);
 
         res.json({ documents: result.rows, total_subtotal: totalSubtotal, total_vat: totalVat });
     } catch (err) {
         console.error('VAT purchase error:', err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
@@ -182,35 +182,43 @@ router.get('/wht', authenticate, async (req, res) => {
     try {
         const { period, type } = req.query; // type: PND3, PND53, 50BIS
         const params = [];
-        let filter = 'AND wht_amount > 0';
+        let periodFilter = '';
         if (period) {
-            filter += ` AND TO_CHAR(created_at, 'YYYY-MM') = $${params.length + 1}`;
+            periodFilter = `AND TO_CHAR(d.created_at, 'YYYY-MM') = $1`;
             params.push(period);
         }
         const result = await pool.query(
             `SELECT d.*, p.name as project_name FROM documents d
        LEFT JOIN projects p ON p.id = d.project_id
-       WHERE status != 'CANCELLED' ${filter}
+       WHERE d.status != 'CANCELLED' AND d.wht_amount > 0 ${periodFilter}
        ORDER BY d.created_at`, params
         );
 
-        const totalWht = result.rows.reduce((sum, r) => sum + parseFloat(r.wht_amount), 0);
-        res.json({ documents: result.rows, total_wht: totalWht, report_type: type || 'PND3' });
+        const totalWht = result.rows.reduce((sum, r) => sum + parseFloat(r.wht_amount || 0), 0);
+        const totalSubtotal = result.rows.reduce((sum, r) => sum + parseFloat(r.subtotal || 0), 0);
+        res.json({ documents: result.rows, total_wht: totalWht, total_subtotal: totalSubtotal, report_type: type || 'PND3' });
     } catch (err) {
         console.error('WHT report error:', err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 
 // GET /api/reports/export
 router.get('/export', authenticate, async (req, res) => {
     try {
-        const { format, type } = req.query; // format: pdf|excel, type: vat-sales|vat-purchase|income-expense
+        const { format, type, period } = req.query; // format: pdf|excel, type: vat-sales|vat-purchase|income-expense
+
+        let periodFilter = '';
+        const params = [];
+        if (period) {
+            periodFilter = `AND TO_CHAR(d.created_at, 'YYYY-MM') = $1`;
+            params.push(period);
+        }
 
         const docs = await pool.query(
             `SELECT d.*, p.name as project_name, p.project_code
        FROM documents d LEFT JOIN projects p ON p.id = d.project_id
-       WHERE d.status != 'CANCELLED' ORDER BY d.created_at`
+       WHERE d.status != 'CANCELLED' ${periodFilter} ORDER BY d.created_at`, params
         );
 
         if (format === 'excel') {
@@ -234,10 +242,10 @@ router.get('/export', authenticate, async (req, res) => {
                     ws.addRow({
                         date: new Date(d.created_at).toLocaleDateString(),
                         doc_number: d.doc_number,
-                        project_name: d.project_name,
-                        subtotal: parseFloat(d.subtotal),
-                        vat_amount: parseFloat(d.vat_amount),
-                        net_total: parseFloat(d.net_total),
+                        project_name: d.project_name || '-',
+                        subtotal: parseFloat(d.subtotal || 0),
+                        vat_amount: parseFloat(d.vat_amount || 0),
+                        net_total: parseFloat(d.net_total || 0),
                     });
                 });
             }
@@ -260,10 +268,34 @@ router.get('/export', authenticate, async (req, res) => {
                         date: new Date(d.created_at).toLocaleDateString(),
                         doc_number: d.doc_number,
                         vendor_name: d.vendor_name || '-',
-                        project_name: d.project_name,
-                        subtotal: parseFloat(d.subtotal),
-                        vat_amount: parseFloat(d.vat_amount),
-                        net_total: parseFloat(d.net_total),
+                        project_name: d.project_name || '-',
+                        subtotal: parseFloat(d.subtotal || 0),
+                        vat_amount: parseFloat(d.vat_amount || 0),
+                        net_total: parseFloat(d.net_total || 0),
+                    });
+                });
+            }
+
+            if (type === 'wht' || !type) {
+                const ws = workbook.addWorksheet('WHT Report');
+                ws.columns = [
+                    { header: 'Date', key: 'date', width: 15 },
+                    { header: 'Doc No.', key: 'doc_number', width: 18 },
+                    { header: 'Vendor', key: 'vendor_name', width: 25 },
+                    { header: 'Tax ID', key: 'vendor_tax_id', width: 18 },
+                    { header: 'Subtotal', key: 'subtotal', width: 15 },
+                    { header: 'WHT', key: 'wht_amount', width: 15 },
+                ];
+                ws.getRow(1).font = { bold: true };
+                const whtDocs = docs.rows.filter(d => parseFloat(d.wht_amount || 0) > 0);
+                whtDocs.forEach(d => {
+                    ws.addRow({
+                        date: new Date(d.created_at).toLocaleDateString(),
+                        doc_number: d.doc_number,
+                        vendor_name: d.vendor_name || '-',
+                        vendor_tax_id: d.vendor_tax_id || '-',
+                        subtotal: parseFloat(d.subtotal || 0),
+                        wht_amount: parseFloat(d.wht_amount || 0),
                     });
                 });
             }
@@ -285,9 +317,9 @@ router.get('/export', authenticate, async (req, res) => {
                         date: new Date(d.created_at).toLocaleDateString(),
                         doc_number: d.doc_number,
                         doc_type: d.doc_type,
-                        project_name: d.project_name,
+                        project_name: d.project_name || '-',
                         category: isIncome ? 'Income' : 'Expense',
-                        net_total: parseFloat(d.net_total),
+                        net_total: parseFloat(d.net_total || 0),
                     });
                 });
             }
@@ -312,7 +344,9 @@ router.get('/export', authenticate, async (req, res) => {
                 ? docs.rows.filter(d => ['INVOICE', 'TAX_INVOICE', 'RECEIPT'].includes(d.doc_type))
                 : type === 'vat-purchase'
                     ? docs.rows.filter(d => ['PO', 'VENDOR_PAYMENT'].includes(d.doc_type))
-                    : docs.rows;
+                    : type === 'wht'
+                        ? docs.rows.filter(d => parseFloat(d.wht_amount || 0) > 0)
+                        : docs.rows;
 
             // Table header
             doc.fontSize(10).font('Helvetica-Bold');
@@ -322,11 +356,11 @@ router.get('/export', authenticate, async (req, res) => {
                 if (doc.y > 700) { doc.addPage(); }
                 doc.font('Helvetica').fontSize(9);
                 const y = doc.y;
-                doc.text(d.doc_number, 50, y);
-                doc.text(d.doc_type, 155, y);
-                doc.text(d.project_name || '-', 240, y);
-                doc.text(parseFloat(d.net_total).toLocaleString(), 400, y);
-                doc.text(d.status, 480, y);
+                doc.text(d.doc_number || '-', 50, y);
+                doc.text(d.doc_type || '-', 155, y);
+                doc.text((d.project_name || '-').substring(0, 20), 240, y);
+                doc.text(parseFloat(d.net_total || 0).toLocaleString(), 400, y);
+                doc.text(d.status || '-', 480, y);
                 doc.moveDown(0.5);
             });
 
@@ -336,7 +370,7 @@ router.get('/export', authenticate, async (req, res) => {
         }
     } catch (err) {
         console.error('Export error:', err);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Server error', details: err.message });
     }
 });
 

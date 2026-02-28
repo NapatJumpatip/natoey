@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 
 const formatCurrency = (v) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB', minimumFractionDigits: 2 }).format(v || 0);
 
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
 const pageConfig = {
     'vat-sales': { title: 'VAT Sales Report', subtitle: 'รายงานภาษีขาย', endpoint: '/reports/vat-sales', exportType: 'vat-sales' },
     'vat-purchase': { title: 'VAT Purchase Report', subtitle: 'รายงานภาษีซื้อ', endpoint: '/reports/vat-purchase', exportType: 'vat-purchase' },
@@ -19,7 +21,7 @@ export default function TaxForms() {
     const config = pageConfig[type] || pageConfig['vat-sales'];
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
+    const [period, setPeriod] = useState(''); // empty = all periods
 
     useEffect(() => {
         loadData();
@@ -42,8 +44,30 @@ export default function TaxForms() {
         }
     };
 
-    const handleExport = (format) => {
-        window.open(`/api/reports/export?format=${format}&type=${config.exportType}&period=${period}`, '_blank');
+    const handleExport = async (format) => {
+        try {
+            const token = localStorage.getItem('accessToken');
+            const url = `${API_URL}/reports/export?format=${format}&type=${config.exportType}${period ? `&period=${period}` : ''}`;
+
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Export failed');
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = `NCON2559_${config.exportType}_${period || 'all'}.${format === 'excel' ? 'xlsx' : 'pdf'}`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+            toast.success('Export downloaded');
+        } catch (err) {
+            toast.error('Export failed');
+        }
     };
 
     return (
@@ -54,7 +78,14 @@ export default function TaxForms() {
                     <p className="text-sm text-surface-500">{config.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="input max-w-[180px]" />
+                    <div className="flex items-center gap-2">
+                        <input type="month" value={period} onChange={(e) => setPeriod(e.target.value)} className="input max-w-[180px]" />
+                        {period && (
+                            <button onClick={() => setPeriod('')} className="btn-ghost text-xs px-2 py-1 text-surface-500">
+                                All
+                            </button>
+                        )}
+                    </div>
                     <button onClick={() => handleExport('excel')} className="btn-secondary">
                         <ArrowDownTrayIcon className="w-4 h-4" /> Excel
                     </button>
@@ -112,7 +143,9 @@ export default function TaxForms() {
                             {loading ? (
                                 [...Array(5)].map((_, i) => <tr key={i}><td colSpan={8}><div className="h-4 bg-surface-200 rounded animate-pulse"></div></td></tr>)
                             ) : (data?.documents || []).length === 0 ? (
-                                <tr><td colSpan={8} className="text-center py-8 text-surface-400">No data for this period</td></tr>
+                                <tr><td colSpan={8} className="text-center py-8 text-surface-400">
+                                    {period ? `No data for ${period}` : 'No data found'}
+                                </td></tr>
                             ) : (data?.documents || []).map((doc, i) => (
                                 <tr key={doc.id}>
                                     <td className="text-surface-400">{i + 1}</td>
