@@ -393,30 +393,35 @@ export default function Dashboard() {
                                     <p className="text-[11px] font-semibold text-surface-400 uppercase tracking-wider">{kpi.title}</p>
                                     <p className="text-[10px] text-surface-300">{kpi.sub}</p>
                                 </div>
-                                <div className="p-2 rounded-xl group-hover:scale-110 transition-transform"
-                                    style={{ backgroundColor: `${kpi.color}10` }}>
-                                    <kpi.icon className="w-4.5 h-4.5" style={{ color: kpi.color }} />
-                                </div>
+                                {/* Trend badge (replaces decorative dot) */}
+                                {kpi.change !== 0 ? (
+                                    <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-transform group-hover:scale-105
+                                        ${isUp ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/60' : 'bg-red-50 text-red-500 ring-1 ring-red-200/60'}`}>
+                                        {isUp ? <ArrowUpIcon className="w-3 h-3" /> : <ArrowDownIcon className="w-3 h-3" />}
+                                        {Math.abs(kpi.change).toFixed(1)}%
+                                    </div>
+                                ) : (
+                                    <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium
+                                        bg-surface-50 text-surface-400 ring-1 ring-surface-200/60 transition-transform group-hover:scale-105">
+                                        <kpi.icon className="w-3 h-3" />
+                                        <span>stable</span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Animated Value */}
-                            <p className="text-[26px] font-black tracking-tight text-surface-900 mt-1"
+                            <p className="text-[26px] font-black tracking-tight text-surface-900 mt-2"
                                 style={{ fontVariantNumeric: 'tabular-nums' }}>
                                 <AnimatedNumber value={kpi.value} />
                             </p>
 
-                            {/* Change badge */}
+                            {/* Context line */}
                             <div className="flex items-center gap-2 mt-1.5">
-                                {kpi.change !== 0 && (
-                                    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-bold
-                                        ${isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'}`}>
-                                        {isUp ? <ArrowUpIcon className="w-2.5 h-2.5" /> : <ArrowDownIcon className="w-2.5 h-2.5" />}
-                                        {Math.abs(kpi.change).toFixed(1)}%
-                                    </span>
-                                )}
-                                <span className="text-[10px] text-surface-300">vs last month</span>
+                                <span className="text-[10px] text-surface-300">
+                                    {kpi.change !== 0 ? `${isUp ? '↑' : '↓'} vs last month` : 'vs last month'}
+                                </span>
                             </div>
-                            {kpi.extra && <p className="text-[10px] text-surface-400 mt-1">{kpi.extra}</p>}
+                            {kpi.extra && <p className="text-[10px] text-surface-400 mt-0.5">{kpi.extra}</p>}
 
                             {/* Sparkline */}
                             <div className="mt-3 -mx-2 opacity-50 group-hover:opacity-100 transition-opacity duration-300">
