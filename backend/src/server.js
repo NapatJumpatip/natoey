@@ -68,7 +68,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`NCON2559 API server running on port ${PORT}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'production'}`);
 });
 
 module.exports = app;
