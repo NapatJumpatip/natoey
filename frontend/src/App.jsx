@@ -10,6 +10,7 @@ import TaxForms from './pages/TaxForms';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import Help from './pages/Help';
+import Employees from './pages/Employees';
 
 export default function App() {
     return (
@@ -26,6 +27,7 @@ export default function App() {
                 <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/help" element={<Help />} />
+                <Route path="/employees" element={<Employees />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
         </Routes>

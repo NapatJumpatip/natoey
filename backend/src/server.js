@@ -9,6 +9,7 @@ const projectRoutes = require('./routes/projects');
 const documentRoutes = require('./routes/documents');
 const reportRoutes = require('./routes/reports');
 const userRoutes = require('./routes/users');
+const employeeRoutes = require('./routes/employees');
 
 const app = express();
 
@@ -53,6 +54,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/documents', documentRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/employees', employeeRoutes);
 
 // 404
 app.use((req, res) => {

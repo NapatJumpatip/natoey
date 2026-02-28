@@ -4,7 +4,7 @@ import {
     HomeIcon, FolderIcon, DocumentTextIcon, ShoppingCartIcon,
     BanknotesIcon, CalculatorIcon, ChartBarIcon, Cog6ToothIcon,
     QuestionMarkCircleIcon, ChevronDownIcon, ChevronLeftIcon,
-    Bars3Icon,
+    Bars3Icon, UserGroupIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../context/AuthContext';
 
@@ -41,6 +41,7 @@ const menuItems = [
         ]
     },
     { name: 'Reports', path: '/reports', icon: ChartBarIcon },
+    { name: 'Employees', path: '/employees', icon: UserGroupIcon },
     { name: 'Settings', path: '/settings', icon: Cog6ToothIcon, adminOnly: true },
     { name: 'Help', path: '/help', icon: QuestionMarkCircleIcon },
 ];
