@@ -1,9 +1,12 @@
 const express = require('express');
+const path = require('path');
 const router = express.Router();
 const pool = require('../db/pool');
 const { authenticate, authorize } = require('../middleware/auth');
 const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
+
+const THAI_FONT = path.join(__dirname, '..', 'fonts', 'NotoSansThai-Regular.ttf');
 
 // GET /api/reports/summary
 router.get('/summary', authenticate, async (req, res) => {
@@ -329,16 +332,25 @@ router.get('/export', authenticate, async (req, res) => {
             await workbook.xlsx.write(res);
             res.end();
         } else if (format === 'pdf') {
-            const doc = new PDFDocument({ margin: 50 });
+            const doc = new PDFDocument({ margin: 50, size: 'A4' });
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename=NCON2559_${type || 'report'}_${new Date().toISOString().slice(0, 10)}.pdf`);
             doc.pipe(res);
 
+            // Register Thai font
+            doc.registerFont('Thai', THAI_FONT);
+            doc.registerFont('Thai-Bold', THAI_FONT);
+
             // Header
-            doc.fontSize(20).text('NCON2559', { align: 'center' });
-            doc.fontSize(14).text('Construction Accounting Report', { align: 'center' });
-            doc.fontSize(10).text(`Generated: ${new Date().toLocaleDateString()}`, { align: 'center' });
-            doc.moveDown(2);
+            doc.font('Thai-Bold').fontSize(22).text('NCON2559', { align: 'center' });
+            doc.font('Thai').fontSize(13).text('Construction Accounting Report', { align: 'center' });
+            const reportTitle = type === 'vat-sales' ? 'รายงานภาษีขาย (VAT Sales)'
+                : type === 'vat-purchase' ? 'รายงานภาษีซื้อ (VAT Purchase)'
+                    : type === 'wht' ? 'รายงานภาษีหัก ณ ที่จ่าย (WHT)'
+                        : 'รายงานรายรับ-รายจ่าย (Income/Expense)';
+            doc.fontSize(11).text(reportTitle, { align: 'center' });
+            doc.fontSize(9).text(`Generated: ${new Date().toLocaleDateString('th-TH')}`, { align: 'center' });
+            doc.moveDown(1.5);
 
             const filteredDocs = type === 'vat-sales'
                 ? docs.rows.filter(d => ['INVOICE', 'TAX_INVOICE', 'RECEIPT'].includes(d.doc_type))
@@ -348,21 +360,59 @@ router.get('/export', authenticate, async (req, res) => {
                         ? docs.rows.filter(d => parseFloat(d.wht_amount || 0) > 0)
                         : docs.rows;
 
-            // Table header
-            doc.fontSize(10).font('Helvetica-Bold');
-            doc.text('Doc No.', 50, doc.y, { width: 100, continued: false });
+            // Column layout
+            const cols = [
+                { label: 'Doc No.', x: 50, w: 95 },
+                { label: 'Type', x: 150, w: 80 },
+                { label: 'Project', x: 235, w: 140 },
+                { label: 'Amount', x: 380, w: 80 },
+                { label: 'Status', x: 465, w: 70 },
+            ];
 
-            filteredDocs.forEach(d => {
-                if (doc.y > 700) { doc.addPage(); }
-                doc.font('Helvetica').fontSize(9);
+            // Table header row
+            const headerY = doc.y;
+            doc.font('Thai-Bold').fontSize(9);
+            doc.rect(45, headerY - 2, 500, 18).fill('#f1f5f9').stroke('#e2e8f0');
+            doc.fillColor('#334155');
+            cols.forEach(c => doc.text(c.label, c.x, headerY + 2, { width: c.w }));
+            doc.moveDown(1);
+
+            // Table rows
+            doc.font('Thai').fillColor('#1e293b');
+            filteredDocs.forEach((d, i) => {
+                if (doc.y > 750) {
+                    doc.addPage();
+                    // Repeat header on new page
+                    const hy = doc.y;
+                    doc.font('Thai-Bold').fontSize(9);
+                    doc.rect(45, hy - 2, 500, 18).fill('#f1f5f9').stroke('#e2e8f0');
+                    doc.fillColor('#334155');
+                    cols.forEach(c => doc.text(c.label, c.x, hy + 2, { width: c.w }));
+                    doc.moveDown(1);
+                    doc.font('Thai').fillColor('#1e293b');
+                }
+
                 const y = doc.y;
-                doc.text(d.doc_number || '-', 50, y);
-                doc.text(d.doc_type || '-', 155, y);
-                doc.text((d.project_name || '-').substring(0, 20), 240, y);
-                doc.text(parseFloat(d.net_total || 0).toLocaleString(), 400, y);
-                doc.text(d.status || '-', 480, y);
-                doc.moveDown(0.5);
+                // Alternate row background
+                if (i % 2 === 1) {
+                    doc.rect(45, y - 2, 500, 16).fill('#f8fafc').fillColor('#1e293b');
+                }
+
+                doc.fontSize(8);
+                doc.text(d.doc_number || '-', cols[0].x, y, { width: cols[0].w });
+                doc.text(d.doc_type || '-', cols[1].x, y, { width: cols[1].w });
+                doc.text((d.project_name || '-').substring(0, 25), cols[2].x, y, { width: cols[2].w });
+                doc.text(parseFloat(d.net_total || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 }), cols[3].x, y, { width: cols[3].w });
+                doc.text(d.status || '-', cols[4].x, y, { width: cols[4].w });
+                doc.moveDown(0.7);
             });
+
+            // Footer totals
+            doc.moveDown(1);
+            const totalAmount = filteredDocs.reduce((s, d) => s + parseFloat(d.net_total || 0), 0);
+            doc.font('Thai-Bold').fontSize(10).fillColor('#0f172a');
+            doc.text(`Total: ${totalAmount.toLocaleString('th-TH', { minimumFractionDigits: 2 })} THB`, { align: 'right' });
+            doc.text(`${filteredDocs.length} documents`, { align: 'right' });
 
             doc.end();
         } else {
