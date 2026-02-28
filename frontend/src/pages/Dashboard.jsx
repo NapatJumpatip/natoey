@@ -432,51 +432,53 @@ export default function Dashboard() {
                 })}
             </div>
 
-            {/* ═══ HEALTH SCORE + MONTHLY COMPARISON ═══ */}
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-                {/* Health Gauge */}
-                <div className="card p-6 flex flex-col items-center justify-center">
-                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-surface-400 mb-4">Financial Health</h3>
-                    <HealthGauge score={healthScore} />
-                    <div className="mt-4 grid grid-cols-3 gap-3 w-full text-center">
-                        <div>
-                            <p className="text-[10px] text-surface-400">Income</p>
-                            <p className="text-xs font-bold text-surface-700">{fmtK(data?.monthly_income || 0)}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-surface-400">Expense</p>
-                            <p className="text-xs font-bold text-surface-700">{fmtK(data?.monthly_expense || 0)}</p>
-                        </div>
-                        <div>
-                            <p className="text-[10px] text-surface-400">Overdue</p>
-                            <p className={`text-xs font-bold ${data?.overdue_count > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{data?.overdue_count || 0}</p>
+            {/* ═══ ANALYTICS ROW: HEALTH + MONTHLY COMPARISON ═══ */}
+            <div className="card p-5">
+                <div className="flex items-center justify-between mb-5">
+                    <div className="flex items-center gap-2">
+                        <ChartBarSquareIcon className="w-5 h-5 text-brand-500" />
+                        <h3 className="text-sm font-bold text-surface-900">Financial Analytics</h3>
+                    </div>
+                    {cur && prev && (
+                        <span className="text-[10px] font-medium text-surface-400 bg-surface-50 px-2.5 py-1 rounded-lg">
+                            {prev.label} → {cur.label}
+                        </span>
+                    )}
+                </div>
+                <div className="flex flex-col lg:flex-row gap-5">
+                    {/* Health Gauge — compact left side */}
+                    <div className="flex flex-col items-center justify-center lg:w-52 flex-shrink-0 p-4 rounded-2xl bg-surface-50/80 border border-surface-100">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-surface-400 mb-3">Health Score</p>
+                        <HealthGauge score={healthScore} />
+                        <div className="mt-3 grid grid-cols-3 gap-2 w-full text-center">
+                            <div>
+                                <p className="text-[9px] text-surface-400">Income</p>
+                                <p className="text-[11px] font-bold text-surface-700">{fmtK(data?.monthly_income || 0)}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-surface-400">Expense</p>
+                                <p className="text-[11px] font-bold text-surface-700">{fmtK(data?.monthly_expense || 0)}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] text-surface-400">Overdue</p>
+                                <p className={`text-[11px] font-bold ${data?.overdue_count > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{data?.overdue_count || 0}</p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Monthly Comparison */}
-                {cur && prev && (
-                    <div className="card p-5 lg:col-span-3">
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-2">
-                                <ChartBarSquareIcon className="w-5 h-5 text-brand-500" />
-                                <h3 className="text-sm font-bold text-surface-900">Monthly Comparison</h3>
-                            </div>
-                            <span className="text-[10px] font-medium text-surface-400 bg-surface-50 px-2 py-1 rounded-lg">
-                                {prev.label} → {cur.label}
-                            </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Monthly Comparison — right side fills remaining space */}
+                    {cur && prev ? (
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-3 gap-3">
                             {[
-                                { label: 'Income', key: 'income', c: cur.income, p: prev.income, clr: '#3b82f6' },
-                                { label: 'Expense', key: 'expense', c: cur.expense, p: prev.expense, clr: '#f59e0b' },
-                                { label: 'Profit', key: 'profit', c: cur.profit, p: prev.profit, clr: cur.profit >= 0 ? '#10b981' : '#ef4444' },
+                                { label: 'Income', c: cur.income, p: prev.income, clr: '#3b82f6' },
+                                { label: 'Expense', c: cur.expense, p: prev.expense, clr: '#f59e0b' },
+                                { label: 'Profit', c: cur.profit, p: prev.profit, clr: cur.profit >= 0 ? '#10b981' : '#ef4444' },
                             ].map((item, i) => {
                                 const pct = item.p ? ((item.c - item.p) / Math.abs(item.p)) * 100 : 0;
                                 const up = pct >= 0;
                                 const maxVal = Math.max(Math.abs(item.c), Math.abs(item.p), 1);
                                 return (
-                                    <div key={i} className="rounded-xl p-4 border border-surface-100 bg-surface-50/50 hover:bg-surface-50 transition-colors">
+                                    <div key={i} className="rounded-xl p-4 border border-surface-100 bg-surface-50/50 hover:bg-white hover:shadow-sm transition-all">
                                         <div className="flex items-center justify-between">
                                             <p className="text-[10px] font-bold uppercase tracking-widest text-surface-400">{item.label}</p>
                                             <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold ${up ? 'text-emerald-600' : 'text-red-500'}`}>
@@ -488,9 +490,8 @@ export default function Dashboard() {
                                             <AnimatedNumber value={item.c} duration={1000} />
                                         </p>
                                         <p className="text-[10px] text-surface-400 mt-0.5">prev: {fmtK(item.p)}</p>
-                                        {/* Comparison bars */}
                                         <div className="flex gap-1.5 mt-3 items-end h-3">
-                                            <div className="rounded-full bg-surface-300 transition-all duration-700"
+                                            <div className="rounded-full bg-surface-200 transition-all duration-700"
                                                 style={{ width: `${(Math.abs(item.p) / maxVal) * 100}%`, height: '6px' }}></div>
                                             <div className="rounded-full transition-all duration-700"
                                                 style={{ width: `${(Math.abs(item.c) / maxVal) * 100}%`, height: '10px', backgroundColor: item.clr }}></div>
@@ -499,8 +500,12 @@ export default function Dashboard() {
                                 );
                             })}
                         </div>
-                    </div>
-                )}
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-sm text-surface-300">
+                            Need at least 2 months of data for comparison
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* ═══ CHARTS ═══ */}
